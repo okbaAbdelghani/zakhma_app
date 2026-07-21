@@ -2,12 +2,14 @@ package com.okbatech.zakhm.domain.usecase
 
 import com.okbatech.zakhm.domain.model.Achievements
 import com.okbatech.zakhm.domain.model.UserProfile
+import com.okbatech.zakhm.domain.notification.NotificationService
 import com.okbatech.zakhm.domain.repository.UserRepository
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
 class CheckAndUnlockAchievementsUseCase @Inject constructor(
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val notificationService: NotificationService
 ) {
     suspend operator fun invoke(profile: UserProfile) {
         val unlocked = userRepository.getUnlockedAchievementIds().first()
@@ -34,7 +36,11 @@ class CheckAndUnlockAchievementsUseCase @Inject constructor(
         var xpBonus = 0
         for (id in toUnlock) {
             userRepository.unlockAchievement(id, now)
-            xpBonus += Achievements.getById(id)?.xpReward ?: 0
+            val achievement = Achievements.getById(id)
+            xpBonus += achievement?.xpReward ?: 0
+            if (achievement != null) {
+                notificationService.showAchievementUnlocked(achievement.title, achievement.description)
+            }
         }
 
         if (xpBonus > 0) {

@@ -3,6 +3,7 @@ package com.okbatech.zakhm.domain.usecase
 import com.okbatech.zakhm.domain.model.Goal
 import com.okbatech.zakhm.domain.model.HabitLog
 import com.okbatech.zakhm.domain.model.UserProfile
+import com.okbatech.zakhm.domain.notification.NotificationService
 import com.okbatech.zakhm.domain.repository.GoalRepository
 import com.okbatech.zakhm.domain.repository.UserRepository
 import kotlinx.coroutines.flow.first
@@ -12,7 +13,8 @@ import javax.inject.Inject
 class LogHabitUseCase @Inject constructor(
     private val goalRepository: GoalRepository,
     private val userRepository: UserRepository,
-    private val checkAchievementsUseCase: CheckAndUnlockAchievementsUseCase
+    private val checkAchievementsUseCase: CheckAndUnlockAchievementsUseCase,
+    private val notificationService: NotificationService
 ) {
     suspend operator fun invoke(goal: Goal, value: Float, note: String = ""): Int {
         val xpEarned = 10
@@ -38,9 +40,10 @@ class LogHabitUseCase @Inject constructor(
         }
         val totalXpGain = xpEarned + completionBonus + streakBonus
         val newXp = profile.totalXp + totalXpGain
+        val newLevel = UserProfile.levelForXp(newXp)
         val updatedProfile = profile.copy(
             totalXp = newXp,
-            level = UserProfile.levelForXp(newXp),
+            level = newLevel,
             currentStreak = streak,
             longestStreak = maxOf(profile.longestStreak, streak),
             lastActiveDate = now,
@@ -49,6 +52,11 @@ class LogHabitUseCase @Inject constructor(
         )
         userRepository.updateUserProfile(updatedProfile)
         checkAchievementsUseCase(updatedProfile)
+
+        if (newLevel > profile.level) {
+            notificationService.showLevelUp(newLevel, updatedProfile.levelTitle)
+        }
+
         return totalXpGain
     }
 
